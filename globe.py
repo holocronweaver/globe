@@ -22,7 +22,7 @@ class Player(object):
     flying = False
     walking = False
     jumping = False
-    near_planet = False
+    near_globe = False
     # movement on (right,look) plane
     strafe = [0, 0]
     # rotation angles (pitch, yaw, roll)
@@ -62,11 +62,11 @@ class Player(object):
         self.camera.position = position
         self.model.position = position
 
-    def rotate(self, planet):
+    def rotate(self, globe):
         pitch, yaw, roll = self.rotation
-        if (self.walking or self.jumping or self.near_planet) and not self.flying:
+        if (self.walking or self.jumping or self.near_globe) and not self.flying:
             # Orient camera on surface tangent plane.
-            normal = normalize(sub(self.camera.position,planet.position))
+            normal = normalize(sub(self.camera.position,globe.position))
             #self.camera.axis = self.camera.orient(normal)
             self.camera.orient(normal)
 
@@ -84,12 +84,12 @@ class Player(object):
         self.rotation = [0,0,0]
         self.camera.orthonormalize()
 
-    def update(self, dt, planet):
+    def update(self, dt, globe):
         self.velocity = [0,0,0]
-        vector_to_planet = sub(self.position,planet.position)
+        vector_to_globe = sub(self.position,globe.position)
         # walking
         if self.walking or self.flying:
-            normal = normalize(vector_to_planet)
+            normal = normalize(vector_to_globe)
             axis = self.camera.axis
             if self.walking: # walk on surface tangent plane
                 right, up, look = orthonormalize(orient(axis, normal))
@@ -104,8 +104,8 @@ class Player(object):
             self.walk_velocity = [0,0,0]
         # gravity
         if not self.flying:
-            r2 = length2(vector_to_planet)
-            r_hat = normalize(vector_to_planet)
+            r2 = length2(vector_to_globe)
+            r_hat = normalize(vector_to_globe)
             g = [-5E5 / r2 * r_hat[i] for i in range(3)]
             self.gravity_velocity = add(self.gravity_velocity, mul(dt, g))
             # establish terminal velocity to simulate air friction
@@ -130,26 +130,26 @@ class Player(object):
         if not self.walking:
             self.velocity = add(self.velocity, self.walk_before_jump)
         # collision
-        self.collide_planet(planet, dt)
+        self.collide_globe(globe, dt)
         # move player
         self.position = add(self.model.position, mul(dt,self.velocity))
 
-        if length(sub(self.position,planet.position)) < (planet.radius + 2):
-            self.near_planet = True
+        if length(sub(self.position,globe.position)) < (globe.radius + 2):
+            self.near_globe = True
         else:
-            self.near_planet = False
+            self.near_globe = False
 
-        self.rotate(planet)
+        self.rotate(globe)
 
     """
     Collision detection and response for collision
-    bounding sphere and planet.
+    bounding sphere and globe.
     """
-    def collide_planet(self, planet, dt):
-        hit = planet.collision_check_sphere(self.model, dt)
+    def collide_globe(self, globe, dt):
+        hit = globe.collision_check_sphere(self.model, dt)
         if hit:
             self.walking = True
-            self.model = planet.collision_response_sphere(self.model, dt)
+            self.model = globe.collision_response_sphere(self.model, dt)
         else:
             self.walking = False
 
@@ -346,11 +346,11 @@ class Window(pyglet.window.Window):
         self.ball_speed = 0.5
 
         self.player = Player(height=2, position=(58, 280, 43))
-        self.planet = Sphere(radius=256, texture='earthmap6.jpg',
+        self.globe = Sphere(radius=256, texture='earthmap6.jpg',
                              slices=80, stacks=80, visible=True)
         self.core = Sphere(radius=15, position=(0,0,0),
                               slices=60, stacks=60, visible=True)
-        self.models = [self.player.model, self.planet, self.core]
+        self.models = [self.player.model, self.globe, self.core]
 
         self.label = pyglet.text.Label('', font_name='Arial', font_size=18,
             x=10, y=self.height - 10, anchor_x='left', anchor_y='top',
@@ -367,10 +367,10 @@ class Window(pyglet.window.Window):
         time_steps = 8
         dt = min(dt, 0.2)
         for step in xrange(time_steps):
-            self.player.update(dt / time_steps, self.planet)
-            self.update_balls(dt / time_steps, self.planet)
+            self.player.update(dt / time_steps, self.globe)
+            self.update_balls(dt / time_steps, self.globe)
 
-    def update_balls(self, dt, planet):
+    def update_balls(self, dt, globe):
         return
         # fly balls
         for ball in self.balls:
@@ -474,7 +474,7 @@ class Window(pyglet.window.Window):
         self.set_3d_draw_mode()
 
         # camera rotation
-        #self.player.rotate(self.planet)
+        #self.player.rotate(self.globe)
         #view_matrix = self.player.camera.view_matrix()
         #print view_matrix
         #glMultMatrixf(view_matrix)
