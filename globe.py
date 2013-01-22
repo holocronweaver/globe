@@ -346,7 +346,7 @@ class Window(pyglet.window.Window):
         self.ball_speed = 0.5
 
         self.player = Player(height=2, position=(58, 280, 43))
-        self.globe = Sphere(radius=256, texture='earthmap6.jpg',
+        self.globe = Sphere(radius=256, texture='images/earthmap6.jpg',
                              slices=80, stacks=80, visible=True)
         self.core = Sphere(radius=15, position=(0,0,0),
                               slices=60, stacks=60, visible=True)
