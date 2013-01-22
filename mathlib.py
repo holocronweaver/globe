@@ -1,6 +1,7 @@
 import math
 import random
 import time
+from ctypes import c_float
 
 """
 Find squared length of a vector.
@@ -72,6 +73,31 @@ def matrix_mul(A, B):
         AB = AB[0]
     return AB
 
+# Orient an 3D axis along a normal vector.
+def orient(axis, normal):
+    right, up, look = axis
+    if dot(up, normal) < 0: # upside down case
+        right = [-x for x in right]
+    up = normal
+    look_up = dot(up, look)
+    look_up = mul(look_up, up)
+    look = sub(look, look_up)
+    right_up = dot(up, right)
+    right_up = mul(right_up, up)
+    right = sub(right, right_up)
+    oriented_axis = [right, up, look]
+    return oriented_axis
+
+def orthonormalize(axis):
+    right, up, look = axis
+    look = normalize(look)
+    up = cross(look, right)
+    up = normalize(up)
+    right = cross(up, look)
+    right = normalize(right)
+    orthonormalized_axis = [right, up, look]
+    return orthonormalized_axis
+
 def transpose(A):
     T = list(A)
     for i in range( len(A) ):
@@ -107,7 +133,7 @@ def rotation_matrix_3D(axis, angle):
     return rotation_matrix
 
 """
-Builds a rotation matrix for rotating a 2D column vector.
+Build a rotation matrix for rotating a 2D column vector.
 """
 def rotation_matrix_2D(angle):
     cos_a = math.cos(angle)
@@ -117,3 +143,19 @@ def rotation_matrix_2D(angle):
         [sin_a, cos_a],
     ]
     return rotation_matrix
+
+"""
+Build a view matrix, which is a 4x4 translation + rotation matrix.
+"""
+def view_matrix(position, axis):
+    right, up, look = axis
+    x = -dot(right, position)
+    y = -dot(up, position)
+    z = -dot(look, position)
+    matrix = (c_float * 16)(
+        right[0], up[0], look[0], 0,
+        right[1], up[1], look[1], 0,
+        right[2], up[2], look[2], 0,
+        x, y, z, 1,
+    )
+    return matrix

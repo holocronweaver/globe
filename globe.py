@@ -18,11 +18,12 @@ import random
 import time
 
 class Player(object):
+    # states
     flying = False
     walking = False
     jumping = False
     near_planet = False
-    # movement on (x,z) plane
+    # movement on (right,look) plane
     strafe = [0, 0]
     # rotation angles (pitch, yaw, roll)
     total_rotation = [0,0,0]
@@ -64,20 +65,18 @@ class Player(object):
     def rotate(self, planet):
         pitch, yaw, roll = self.rotation
         if (self.walking or self.jumping or self.near_planet) and not self.flying:
-            # Orient camera on surface tangent coordinates.
+            # Orient camera on surface tangent plane.
             normal = normalize(sub(self.camera.position,planet.position))
+            #self.camera.axis = self.camera.orient(normal)
             self.camera.orient(normal)
-            #print self.camera.up
 
             # Approximate pitch limitations of human head.
             self.total_rotation = add(self.rotation, self.total_rotation)
-            print self.total_rotation
             total_pitch, total_yaw, total_row = self.total_rotation
             total_pitch = min(60, max(-80, total_pitch))
             self.total_rotation[0] = total_pitch
 
             self.camera.yaw(-math.radians(yaw))
-            #self.camera.pitch(-pitch)
             self.camera.pitch(-math.radians(total_pitch))
         else:
             self.camera.yaw(-math.radians(yaw))
@@ -87,21 +86,27 @@ class Player(object):
 
     def update(self, dt, planet):
         self.velocity = [0,0,0]
+        vector_to_planet = sub(self.position,planet.position)
         # walking
         if self.walking or self.flying:
-            #FIXME change from camera axis to tangent plane axis
-            strafe_right = mul(self.walk_speed * self.strafe[1], self.camera.right)
-            strafe_look = mul(self.walk_speed * self.strafe[0], self.camera.look)
-            self.walk_velocity = add(strafe_right, strafe_look)
+            normal = normalize(vector_to_planet)
+            axis = self.camera.axis
+            if self.walking: # walk on surface tangent plane
+                right, up, look = orthonormalize(orient(axis, normal))
+            else:
+                right, up, look = axis
+            strafe_look = mul(self.walk_speed * self.strafe[0], look)
+            strafe_right = mul(self.walk_speed * -self.strafe[1], right)
+            self.walk_velocity = add(strafe_look, strafe_right)
             self.velocity = add(self.velocity, self.walk_velocity)
+            print self.walk_velocity
         else:
             self.walk_velocity = [0,0,0]
         # gravity
         if not self.flying:
-            vector_to_planet = self.position
             r2 = length2(vector_to_planet)
             r_hat = normalize(vector_to_planet)
-            g = [-6E4 / r2 * r_hat[i] for i in range(3)]
+            g = [-5E5 / r2 * r_hat[i] for i in range(3)]
             self.gravity_velocity = add(self.gravity_velocity, mul(dt, g))
             # establish terminal velocity to simulate air friction
             #self.gravity_velocity = max(self.gravity_velocity, )
@@ -157,19 +162,18 @@ class Camera(object):
         self.look = look
         self.up = up
         self.right = right
+        self.axis = [self.right, self.up, self.look]
         self.mode = mode # currently unused
 
+    @property
+    def axis(self):
+        return (self.right, self.up, self.look)
+    @axis.setter
+    def axis(self, axis):
+        self.right, self.up, self.look = axis
+
     def view_matrix(self):
-        # Build the view matrix.
-        x = -dot(self.right, self.position)
-        y = -dot(self.up, self.position)
-        z = -dot(self.look, self.position)
-        matrix = (GLfloat * 16)(
-            self.right[0], self.up[0], self.look[0], 0,
-            self.right[1], self.up[1], self.look[1], 0,
-            self.right[2], self.up[2], self.look[2], 0,
-            x, y, z, 1,
-        )
+        matrix = view_matrix(self.position, self.axis)
         return matrix
 
     def move(self, displacement_vector):
@@ -177,24 +181,12 @@ class Camera(object):
 
     # Orient camera 'up' along a normalized direction.
     def orient(self, normal):
-        if dot(self.up, normal) < 0: # upside down case
-            self.right = [-x for x in self.right]
-        self.up = normal
-        look_up = dot(self.up, self.look)
-        look_up = mul(look_up, self.up)
-        self.look = sub(self.look, look_up)
-        right_up = dot(self.up, self.right)
-        right_up = mul(right_up, self.up)
-        self.right = sub(self.right, right_up)
+        self.axis = orient(self.axis, normal)
         self.orthonormalize()
 
     # Prevents floating point errors from accumulating.
     def orthonormalize(self):
-        self.look = normalize(self.look)
-        self.up = cross(self.look, self.right)
-        self.up = normalize(self.up)
-        self.right = cross(self.up, self.look)
-        self.right = normalize(self.right)
+        self.axis = orthonormalize(self.axis)
 
     def pitch(self, angle):
         T = rotation_matrix_2D(angle)
@@ -247,11 +239,7 @@ class Sphere(object):
             glEnable(self.texture.target)
             glBindTexture(self.texture.target, self.texture.id)
 
-            #gluSphere(self.quadric,self.radius,self.slices,self.stacks)
-
-            #gluDeleteQuadric(self.quadric)
             glDisable(self.texture.target)
-
 
     # Check if point will be in sphere after moving.
     def collision_check_point(self, r, dr):
@@ -487,16 +475,13 @@ class Window(pyglet.window.Window):
 
         # camera rotation
         #self.player.rotate(self.planet)
+        #view_matrix = self.player.camera.view_matrix()
+        #print view_matrix
+        #glMultMatrixf(view_matrix)
 
-        view_matrix = self.player.camera.view_matrix()
-        '''
-        print view_matrix
-        glMultMatrixf(view_matrix)
-        '''
         position = self.player.position
-        look = self.player.camera.look
+        right, up, look = self.player.camera.axis
         view = add(look,position)
-        up = self.player.camera.up
         gluLookAt(
             position[0], position[1], position[2],
             view[0], view[1], view[2],
