@@ -1,9 +1,12 @@
 globe
 =====
 
-FPS controls on a spherical globe using Python and Pyglet.
+Walk, jump, and shoot colorful balls on a rotating globe.
 
-Satellite images are from NASA and therefore are in the public domain.
+Uses standard FPS controls. Press Tab to fly.
 
-Foundation for the code is loosely based on [fogleman/Minecraft](https://github.com/fogleman/Minecraft).
+Created using Python and Pyglet. Foundation for the code is loosely based on [fogleman/Minecraft](https://github.com/fogleman/Minecraft).
+
+Satellite images are from NASA and are therefore in the public domain.
+
 

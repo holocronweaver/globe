@@ -1,20 +1,17 @@
 #!/usr/bin/env python
 """
-Walk and jump on a spherical globe centered at the origin.
+Walk, jump, and shoot colorful balls on a rotating globe.
 Uses Pyglet to call OpenGL fixed function routines, including gluSphere.
 TODO
-* finish ball gun
-* fix walk stuttering
+* make planet rotate and have player travel along
 """
 from mathlib import *
 from pyglet import image
 from pyglet.gl import *
 from pyglet.gl.glu import *
 from pyglet.window import key
-from ctypes import c_float
 import math
-import random
-import time
+from random import random
 
 class Player(object):
     # states
@@ -136,10 +133,8 @@ class Player(object):
 
         if length(sub(self.position,globe.position)) < (globe.radius + self.height + 2):
             self.near_globe = True
-            print 'near globe'
         else:
             self.near_globe = False
-            print 'in a galaxy far, far away'
 
         self.rotate(globe)
 
@@ -221,7 +216,8 @@ class Plane(object):
 # Lazy gluSphere with collision handling.
 class Sphere(object):
     def __init__(self, radius=1, position=[0,0,0], velocity=[0,0,0],
-                 visible=False, slices=0, stacks=0, texture=None):
+                 visible=False, slices=0, stacks=0,
+                 color=None, texture=None):
         self.radius = radius
         self.position = position
         self.velocity = velocity
@@ -229,6 +225,7 @@ class Sphere(object):
         self.visible = visible
         self.slices = slices
         self.stacks = stacks
+        self.color = color
         self.texture = texture
 
         self.quadric = gluNewQuadric()
@@ -309,22 +306,20 @@ class Sphere(object):
         return sphere
 
     def draw(self):
+        glPushMatrix()
         if self.texture:
             glEnable(self.texture.target)
             glBindTexture(self.texture.target, self.texture.id)
-            #glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_SPHERE_MAP)
-            #glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_SPHERE_MAP)
-            #glEnable(GL_TEXTURE_GEN_S)
-            #glEnable(GL_TEXTURE_GEN_T)
-            rotate = 90
-            glRotatef(180,1.0,0.0,0.0)
-            glRotatef(rotate,0.0,0.0,1.0)
-            gluQuadricTexture(self.quadric,1)
+            gluQuadricTexture(self.quadric,GL_TRUE)
+        if self.color:
+            r, g, b = self.color
+            glColor3f(r, g, b)
+        glTranslatef(self.position[0], self.position[1], self.position[2]);
         gluSphere(self.quadric,self.radius,self.slices,self.stacks)
         if self.texture:
-            #glDisable(GL_TEXTURE_GEN_S)
-            #glDisable(GL_TEXTURE_GEN_T)
+            gluQuadricTexture(self.quadric,GL_FALSE)
             glDisable(self.texture.target)
+        glPopMatrix()
 
     """
     Transform position and look_at vectors together so that they
@@ -345,13 +340,13 @@ class Window(pyglet.window.Window):
         self.exclusive = False
 
         self.balls = []
-        self.ball_speed = 0.5
+        self.ball_speed = 2
 
-        self.player = Player(height=2, position=(58, 280, 43))
-        self.globe = Sphere(radius=256, texture='images/earthmap6.jpg',
+        self.player = Player(height=2, position=(290, 50, 40))
+        self.globe = Sphere(radius=256, texture='images/earth.jpg',
                              slices=80, stacks=80, visible=True)
-        self.core = Sphere(radius=15, position=(0,0,0),
-                              slices=60, stacks=60, visible=True)
+        self.core = Sphere(radius=50, color = [1,0,0],
+                           slices=30, stacks=30, visible=True)
         self.models = [self.player.model, self.globe, self.core]
 
         self.label = pyglet.text.Label('', font_name='Arial', font_size=18,
@@ -370,25 +365,34 @@ class Window(pyglet.window.Window):
         dt = min(dt, 0.2)
         for step in xrange(time_steps):
             self.player.update(dt / time_steps, self.globe)
-            self.update_balls(dt / time_steps, self.globe)
+            self.balls_update(dt / time_steps, self.globe)
 
-    def update_balls(self, dt, globe):
-        return
-        # fly balls
+    def balls_update(self, dt, globe):
         for ball in self.balls:
+            vector_to_globe = sub(ball.position,globe.position)
+            # collision
+            hit = self.globe.collision_check_sphere(ball, dt)
+            if hit:
+                ball = globe.collision_response_sphere(ball, dt)
+            for other_ball in self.balls:
+                if ball is other_ball: continue
+                hit = other_ball.collision_check_sphere(ball, dt)
+                if hit:
+                    ball = ball.collision_response_sphere(ball, dt)
+            hit = self.player.model.collision_check_sphere(ball, dt)
+            if hit:
+                ball = self.player.model.collision_response_sphere(ball, dt)
             ball.position = add(ball.position, mul(dt,ball.velocity))
 
     def on_mouse_press(self, x, y, button, modifiers):
-        return
         if self.exclusive:
-            sight_vector = self.get_sight_vector()
-            ball = Sphere(radius=2, position=self.player.position,
+            if len(self.balls) == 25: return
+            sight_vector = self.player.camera.look
+            ball = Sphere(radius=2, position=add(self.player.position,mul(3,self.player.camera.look)),
                           velocity=mul(self.ball_speed, sight_vector),
-                          visible=True, slices=10, stacks=10)
+                          color=[random(),random(),random()],
+                          visible=True, slices=40, stacks=40)
             self.balls.append(ball)
-            self.models.append(ball)
-            #print self.balls[-1].velocity
-            return
         else:
             self.set_exclusive_mouse(True)
 
