@@ -386,7 +386,7 @@ class Window(pyglet.window.Window):
 
     def on_mouse_press(self, x, y, button, modifiers):
         if self.exclusive:
-            if len(self.balls) == 25: return
+            if len(self.balls) == 22: return
             sight_vector = self.player.camera.look
             ball = Sphere(radius=2, position=add(self.player.position,mul(3,self.player.camera.look)),
                           velocity=mul(self.ball_speed, sight_vector),
@@ -494,6 +494,8 @@ class Window(pyglet.window.Window):
         self.set_2d_draw_mode()
         self.draw_label()
         #self.draw_reticle()
+
+        glFlush()
 
     def draw_label(self):
         x, y, z = self.player.position
