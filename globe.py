@@ -3,9 +3,8 @@
 Walk and jump on a spherical globe centered at the origin.
 Uses Pyglet to call OpenGL fixed function routines, including gluSphere.
 TODO
-* fix walk stuttering
-* make jumping a fully projectile motion
 * finish ball gun
+* fix walk stuttering
 """
 from mathlib import *
 from pyglet import image
@@ -67,7 +66,6 @@ class Player(object):
         if (self.walking or self.jumping or self.near_globe) and not self.flying:
             # Orient camera on surface tangent plane.
             normal = normalize(sub(self.camera.position,globe.position))
-            #self.camera.axis = self.camera.orient(normal)
             self.camera.orient(normal)
 
             # Approximate pitch limitations of human head.
@@ -93,20 +91,19 @@ class Player(object):
             axis = self.camera.axis
             if self.walking: # walk on surface tangent plane
                 right, up, look = orthonormalize(orient(axis, normal))
-            else:
+            else: # fly about
                 right, up, look = axis
             strafe_look = mul(self.walk_speed * self.strafe[0], look)
             strafe_right = mul(self.walk_speed * -self.strafe[1], right)
             self.walk_velocity = add(strafe_look, strafe_right)
             self.velocity = add(self.velocity, self.walk_velocity)
-            print self.walk_velocity
         else:
             self.walk_velocity = [0,0,0]
         # gravity
         if not self.flying:
             r2 = length2(vector_to_globe)
             r_hat = normalize(vector_to_globe)
-            g = [-5E5 / r2 * r_hat[i] for i in range(3)]
+            g = [-3E6 / r2 * r_hat[i] for i in range(3)]
             self.gravity_velocity = add(self.gravity_velocity, mul(dt, g))
             # establish terminal velocity to simulate air friction
             #self.gravity_velocity = max(self.gravity_velocity, )
@@ -116,28 +113,33 @@ class Player(object):
             self.gravity_velocity = [0,0,0]
         # jumping
         if self.jumping:
-            if self.walking:
-                self.walk_before_jump = self.walk_velocity
-            sphere_normal = normalize(self.position)
-            self.jump_velocity = mul(self.jump_speed, sphere_normal)
-            self.velocity = add(self.velocity, self.jump_velocity)
-            self.jump_time += dt
-            if self.jump_time > 1:
+            self.max_jump_time = 2
+            if self.jump_time < 1 or not self.near_globe:
+                normal = normalize(vector_to_globe)
+                direction = 1 if self.jump_time < 2 else 0
+                self.jump_velocity = mul(direction * self.jump_speed, normal)
+                self.velocity = add(self.velocity, self.jump_velocity)
+                self.jump_time += dt
+                if not self.walking:
+                    self.velocity = add(self.velocity, self.walk_before_jump)
+                else:
+                    self.walk_before_jump = self.walk_velocity
+            else:
                 self.jumping = False
                 self.jump_time = 0
                 self.jump_velocity = [0,0,0]
                 self.walk_before_jump = [0,0,0]
-        if not self.walking:
-            self.velocity = add(self.velocity, self.walk_before_jump)
         # collision
         self.collide_globe(globe, dt)
         # move player
         self.position = add(self.model.position, mul(dt,self.velocity))
 
-        if length(sub(self.position,globe.position)) < (globe.radius + 2):
+        if length(sub(self.position,globe.position)) < (globe.radius + self.height + 2):
             self.near_globe = True
+            print 'near globe'
         else:
             self.near_globe = False
+            print 'in a galaxy far, far away'
 
         self.rotate(globe)
 
@@ -392,12 +394,10 @@ class Window(pyglet.window.Window):
 
     def on_mouse_motion(self, x, y, dx, dy):
         if self.exclusive:
-            #TODO move to Player class
             rate = 0.015
             dx, dy = math.degrees(dx), math.degrees(dy)
             pitch, yaw, roll = self.player.rotation
             yaw, pitch = yaw + dx * rate, pitch + dy * rate
-            #TODO roll could come via joystick twist or mousewheel
             roll = 0
             self.player.rotation = (pitch, yaw, roll)
 
@@ -473,12 +473,6 @@ class Window(pyglet.window.Window):
         self.clear()
         self.set_3d_draw_mode()
 
-        # camera rotation
-        #self.player.rotate(self.globe)
-        #view_matrix = self.player.camera.view_matrix()
-        #print view_matrix
-        #glMultMatrixf(view_matrix)
-
         position = self.player.position
         right, up, look = self.player.camera.axis
         view = add(look,position)
@@ -503,11 +497,9 @@ class Window(pyglet.window.Window):
             pyglet.clock.get_fps(), x, y, z,)
         self.label.draw()
 
-    """
     def draw_reticle(self):
         glColor3d(0, 0, 0)
         self.reticle.draw(GL_LINES)
-    """
 
 
 def setup_fog():
