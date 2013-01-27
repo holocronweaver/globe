@@ -3,7 +3,7 @@
 Walk, jump, and shoot colorful balls on a rotating globe.
 Uses Pyglet to call OpenGL fixed function routines, including gluSphere.
 TODO
-* make planet rotate and have player travel along
+* optimize OpenGL calls to increase max number of balls
 """
 from mathlib import *
 from pyglet import image
@@ -86,8 +86,14 @@ class Player(object):
         if self.walking or self.flying:
             normal = normalize(vector_to_globe)
             axis = self.camera.axis
-            if self.walking: # walk on surface tangent plane
+            if self.walking: # walk on sphere surface tangent plane
                 right, up, look = orthonormalize(orient(axis, normal))
+                if globe.rotate: # centripetal friction
+                    axis_of_rotation = [0,0,1]
+                    angular_velocity = globe.rotate[0] / dt / 920
+                    rotation_vector = mul(angular_velocity,axis_of_rotation)
+                    centripetal_velocity = cross(rotation_vector,self.position)
+                    self.velocity = add(self.velocity, centripetal_velocity)
             else: # fly about
                 right, up, look = axis
             strafe_look = mul(self.walk_speed * self.strafe[0], look)
@@ -103,9 +109,11 @@ class Player(object):
             g = [-3E6 / r2 * r_hat[i] for i in range(3)]
             self.gravity_velocity = add(self.gravity_velocity, mul(dt, g))
             # establish terminal velocity to simulate air friction
-            #self.gravity_velocity = max(self.gravity_velocity, )
+            terminal_velocity = 90
+            if length(self.gravity_velocity) > terminal_velocity:
+                self.gravity_velocity = mul(terminal_velocity, normalize(self.gravity_velocity))
             self.velocity = add(self.velocity, self.gravity_velocity)
-            #print 'gravitatin:',g,self.gravity_velocity,self.velocity
+            print 'gravitatin:',g,self.gravity_velocity,length(self.gravity_velocity)
         if self.walking: # normal force
             self.gravity_velocity = [0,0,0]
         # jumping
@@ -215,12 +223,15 @@ class Plane(object):
 
 # Lazy gluSphere with collision handling.
 class Sphere(object):
+    rotation = 0
+
     def __init__(self, radius=1, position=[0,0,0], velocity=[0,0,0],
-                 visible=False, slices=0, stacks=0,
-                 color=None, texture=None):
+                 rotate=None, visible=False,
+                 slices=0, stacks=0, color=None, texture=None):
         self.radius = radius
         self.position = position
         self.velocity = velocity
+        self.rotate = rotate
 
         self.visible = visible
         self.slices = slices
@@ -315,6 +326,9 @@ class Sphere(object):
             r, g, b = self.color
             glColor3f(r, g, b)
         glTranslatef(self.position[0], self.position[1], self.position[2]);
+        if self.rotate:
+            glRotatef(self.rotation, 0.0, 0.0, 1.0)
+            self.rotation += self.rotate[0]
         gluSphere(self.quadric,self.radius,self.slices,self.stacks)
         if self.texture:
             gluQuadricTexture(self.quadric,GL_FALSE)
@@ -343,11 +357,16 @@ class Window(pyglet.window.Window):
         self.ball_speed = 2
 
         self.player = Player(height=2, position=(290, 50, 40))
-        self.globe = Sphere(radius=256, texture='images/earth.jpg',
-                             slices=80, stacks=80, visible=True)
-        self.core = Sphere(radius=50, color = [1,0,0],
+        self.globe = Sphere(radius=256, rotate=[0.01,None],#rotate=[0.01,None],
+                            texture='images/earth.jpg',
+                             slices=32000, stacks=32000, visible=True)
+        self.sun = Sphere(radius=15, #position=(300, 50, 40),
+                           texture='images/sun.jpg',
                            slices=30, stacks=30, visible=True)
-        self.models = [self.player.model, self.globe, self.core]
+        #self.moon = Sphere(radius=15, position=(290,50,40),
+        #                   texture='images/moon.jpg', rotate=[50,50],
+        #                   slices=60, stacks=60, visible=True)
+        self.models = [self.player.model, self.globe, self.sun]
 
         self.label = pyglet.text.Label('', font_name='Arial', font_size=18,
             x=10, y=self.height - 10, anchor_x='left', anchor_y='top',
@@ -421,11 +440,12 @@ class Window(pyglet.window.Window):
             self.player.walk_speed += 30
         elif symbol in (key.LCTRL, key.RCTRL):
             self.player.walk_speed -= 10
-        elif symbol == key.ESCAPE:
-            self.set_exclusive_mouse(False)
         elif symbol == key.TAB:
             self.player.flying = not self.player.flying
             self.player.walk_speed = 30 if self.player.flying else 15
+            if self.player.flying: self.player.jumping = False
+        elif symbol == key.ESCAPE:
+            self.set_exclusive_mouse(False)
 
     def on_key_release(self, symbol, modifiers):
         if symbol in (key.W, key.UP):
@@ -524,6 +544,14 @@ def setup():
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_NORMALIZE)
     glEnable(GL_COLOR_MATERIAL)
+    #glEnable(GL_POINT_SMOOTH)
+    #glEnable(GL_LINE_SMOOTH)
+    #glHint(GL_LINE_SMOOTH_HINT, GL_DONT_CARE)
+    #glBlendFunc(GL_SRC_ALPHA_SATURATE, GL_ONE);
+    #glEnable(GL_BLEND);
+    glEnable(GL_POLYGON_SMOOTH)
+    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
