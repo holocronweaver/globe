@@ -113,7 +113,7 @@ class Player(object):
             if length(self.gravity_velocity) > terminal_velocity:
                 self.gravity_velocity = mul(terminal_velocity, normalize(self.gravity_velocity))
             self.velocity = add(self.velocity, self.gravity_velocity)
-            print 'gravitatin:',g,self.gravity_velocity,length(self.gravity_velocity)
+            #print 'gravitatin:',g,self.gravity_velocity,length(self.gravity_velocity)
         if self.walking: # normal force
             self.gravity_velocity = [0,0,0]
         # jumping
@@ -355,6 +355,7 @@ class Window(pyglet.window.Window):
 
         self.balls = []
         self.ball_speed = 2
+        self.balls_max = 22
 
         self.player = Player(height=2, position=(290, 50, 40))
         self.globe = Sphere(radius=256, rotate=[0.01,None],#rotate=[0.01,None],
@@ -388,7 +389,7 @@ class Window(pyglet.window.Window):
 
     def balls_update(self, dt, globe):
         for ball in self.balls:
-            vector_to_globe = sub(ball.position,globe.position)
+            vector_to_globe = sub(ball.position, globe.position)
             # collision
             hit = self.globe.collision_check_sphere(ball, dt)
             if hit:
@@ -405,7 +406,7 @@ class Window(pyglet.window.Window):
 
     def on_mouse_press(self, x, y, button, modifiers):
         if self.exclusive:
-            if len(self.balls) == 22: return
+            if len(self.balls) == self.balls_max: return
             sight_vector = self.player.camera.look
             ball = Sphere(radius=2, position=add(self.player.position,mul(3,self.player.camera.look)),
                           velocity=mul(self.ball_speed, sight_vector),
@@ -558,7 +559,8 @@ def setup():
     setup_fog()
 
 def main():
-    window = Window(width=1024, height=768, caption='Pyglet Sphere', resizable=True)
+    window = Window(width=1024, height=768,
+                    caption='Pyglet Sphere', resizable=True)
     window.set_exclusive_mouse(True)
     setup()
     pyglet.app.run()
